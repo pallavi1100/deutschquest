@@ -67,7 +67,8 @@ p, label, [data-testid="stMarkdownContainer"] { color: #d7d7ec; }
 @media(max-width:680px) { .avatar {font-size:65px} .character-card{min-height:250px;padding:10px 4px;} .character-name{font-size:17px} .character-card.side .avatar{font-size:50px} .character-role{font-size:9px; letter-spacing:1px;} .block-container{padding-top:1.2rem;} }
 </style>
 """
-# st.markdown(STYLES, unsafe_allow_html=True)
+st.markdown(STYLES, unsafe_allow_html=True)
+
 HEROES = [
     {"name": "LENA", "role": "THE EXPLORER", "avatar": "🧑‍🚀", "color": "#40e4fc", "skill": "Curiosity 10"},
     {"name": "MAX", "role": "THE WORD WIZARD", "avatar": "🧙", "color": "#ffa83c", "skill": "Vocabulary 10"},
