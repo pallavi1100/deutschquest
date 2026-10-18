@@ -94,3 +94,157 @@ def go(screen):
 def start_mission(index):
     if index > 0 and MISSIONS[index - 1]["id"] not in st.session_state.completed:
         return
+
+    st.session_state.mission_idx = index
+    st.session_state.attempt += 1
+    st.session_state.question_idx = 0
+    st.session_state.checked = False
+    st.session_state.was_correct = False
+    st.session_state.round_correct = 0
+    st.session_state.hearts = 5
+    go("quiz")
+
+
+def card(hero, side=False):
+    accent = html.escape(hero["color"])
+    return f"""
+    <div class="character-card {'side' if side else ''}" style="--accent:{accent}">
+      <div class="avatar">{html.escape(hero['avatar'])}</div>
+      <div class="character-name">{html.escape(hero['name'])}</div>
+      <div class="character-role">{html.escape(hero['role'])}</div>
+      <span class="skill-pill">✦ {html.escape(hero['skill'])}</span>
+    </div>
+    """
+
+
+def scoreboard():
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f'<div class="score-card">⭐ XP<br><strong>{st.session_state.xp}</strong></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'<div class="score-card">🏅 Completed<br><strong>{len(st.session_state.completed)}/{len(MISSIONS)}</strong></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown(f'<div class="score-card">🧑 Hero<br><strong>{html.escape(st.session_state.equipped or "None")}</strong></div>', unsafe_allow_html=True)
+
+
+if st.session_state.screen == "lobby":
+    st.markdown('<div class="eyebrow">✦ DEUTSCHQUEST · HERO LOBBY ✦</div>', unsafe_allow_html=True)
+    st.markdown('<div class="game-title">Choose your hero</div>', unsafe_allow_html=True)
+    st.markdown('<div class="game-sub">Rotate the roster. Your German adventure starts with you.</div>', unsafe_allow_html=True)
+
+    selected = st.session_state.hero_idx
+    left, center, right = st.columns([1, 1.35, 1], vertical_alignment="center")
+    with left:
+        st.markdown(card(HEROES[(selected - 1) % len(HEROES)], side=True), unsafe_allow_html=True)
+        if st.button("← Previous hero", key="previous"):
+            st.session_state.hero_idx = (selected - 1) % len(HEROES)
+            st.rerun()
+    with center:
+        st.markdown(card(HEROES[selected]), unsafe_allow_html=True)
+        if st.button(f"⚡ Equip {HEROES[selected]['name']} & Play", key="equip"):
+            st.session_state.equipped = HEROES[selected]["name"]
+            go("map")
+    with right:
+        st.markdown(card(HEROES[(selected + 1) % len(HEROES)], side=True), unsafe_allow_html=True)
+        if st.button("Next hero →", key="next"):
+            st.session_state.hero_idx = (selected + 1) % len(HEROES)
+            st.rerun()
+    st.markdown('<div class="game-sub">A1 is playable now · A2 and B1 worlds unlock in later updates.</div>', unsafe_allow_html=True)
+
+elif st.session_state.screen == "map":
+    st.markdown('<div class="small-label">🗺️ ADVENTURE MAP · WORLD 1</div>', unsafe_allow_html=True)
+    st.title("🇩🇪 Welcome to DeutschQuest")
+    st.write(f"Ready, {st.session_state.equipped}? Start in Germany and learn by completing real-life missions.")
+    scoreboard()
+    st.markdown("### 🌱 A1 — New in Germany")
+    for i, mission in enumerate(MISSIONS):
+        unlocked = i == 0 or MISSIONS[i-1]["id"] in st.session_state.completed
+        completed = mission["id"] in st.session_state.completed
+        label = "✅ Completed" if completed else ("🎯 Play mission" if unlocked else "🔒 Locked")
+        info_col, btn_col = st.columns([3.5, 1], vertical_alignment="center")
+        with info_col:
+            cls = "mission-card" if unlocked else "mission-card locked"
+            st.markdown(f"""<div class="{cls}">
+              <div class="mission-title">{mission['emoji']} {html.escape(mission['title'])}</div>
+              <div class="mission-sub">📍 {html.escape(mission['location'])} — {html.escape(mission['subtitle'])}</div>
+              <div class="mission-grammar">📚 {html.escape(mission['grammar'])}</div>
+              </div>""", unsafe_allow_html=True)
+        with btn_col:
+            if st.button(label if not completed else "↻ Replay", key=f"mission_{i}", disabled=not unlocked):
+                start_mission(i)
+    st.markdown("### 🔒 Next worlds")
+    st.write("🏙️ A2 · Living in Germany — coming later")
+    st.write("🏆 B1 · Independent in Germany — coming later")
+    if st.button("← Change hero"):
+        go("lobby")
+
+elif st.session_state.screen == "quiz":
+    mission = MISSIONS[st.session_state.mission_idx]
+    qidx = st.session_state.question_idx
+    questions = mission["questions"]
+    item = questions[qidx]
+    st.markdown(f'<div class="small-label">{mission["emoji"]} {html.escape(mission["location"])} · A1 MISSION</div>', unsafe_allow_html=True)
+    st.title(mission["title"])
+    st.write(mission["subtitle"])
+    st.progress((qidx + 1) / len(questions), text=f"Question {qidx + 1} of {len(questions)}")
+    st.markdown(f"**❤️ Lives:** {st.session_state.hearts} / 5 · **⭐ XP:** {st.session_state.xp}")
+    st.markdown(f'<div class="game-panel"><div class="small-label">CHALLENGE {qidx + 1}</div><h3>{html.escape(item["prompt"])}</h3></div>', unsafe_allow_html=True)
+    answer = st.radio("Choose the best answer:", item["options"], index=None, key=f"answer_{st.session_state.attempt}_{mission['id']}_{qidx}", disabled=st.session_state.checked)
+
+    if not st.session_state.checked:
+        if st.button("✅ Check answer", key="check"):
+            if answer is None:
+                st.warning("Choose an answer first.")
+            else:
+                correct = answer == item["options"][item["answer"]]
+                st.session_state.checked = True
+                st.session_state.was_correct = correct
+                if correct:
+                    st.session_state.round_correct += 1
+                    unique = f"{mission['id']}:{qidx}"
+                    if unique not in st.session_state.awarded:
+                        st.session_state.awarded.append(unique)
+                        st.session_state.xp += 10
+                else:
+                    st.session_state.hearts -= 1
+                st.rerun()
+    else:
+        if st.session_state.was_correct:
+            st.success("🎉 Richtig! Correct! +10 XP (first successful completion only).")
+        else:
+            st.error(f"Not quite. ✅ Correct answer: {item['options'][item['answer']]}")
+        st.markdown(f"""<div class="grammar-panel">
+           <strong>📚 Why? Grammar explained</strong><p>{html.escape(item['grammar'])}</p>
+           <strong>💬 Example</strong><p>{html.escape(item['example'])}</p>
+           </div>""", unsafe_allow_html=True)
+        if st.session_state.hearts == 0:
+            st.warning("Your five lives are used up. Review the explanations and try again!")
+            if st.button("🔁 Retry mission"):
+                start_mission(st.session_state.mission_idx)
+        else:
+            if st.button("Finish mission 🏆" if qidx == len(questions)-1 else "Next question →", key="advance"):
+                if qidx == len(questions)-1:
+                    if mission["id"] not in st.session_state.completed:
+                        st.session_state.completed.append(mission["id"])
+                        st.session_state.xp += 20
+                    go("results")
+                else:
+                    st.session_state.question_idx += 1
+                    st.session_state.checked = False
+                    st.session_state.was_correct = False
+                    st.rerun()
+    if st.button("← Adventure map"):
+        go("map")
+
+elif st.session_state.screen == "results":
+    mission = MISSIONS[st.session_state.mission_idx]
+    st.markdown('<div class="eyebrow">✦ LEVEL COMPLETE ✦</div>', unsafe_allow_html=True)
+    st.markdown('<div class="game-title">🏆 Mission cleared!</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="game-sub">{html.escape(mission["title"])} — {st.session_state.round_correct} out of {len(mission["questions"])} correct this round.</div>', unsafe_allow_html=True)
+    scoreboard()
+    st.markdown(f'<div class="grammar-panel"><strong>🧠 Grammar mastered in this mission</strong><p>{html.escape(mission["grammar"])}</p></div>', unsafe_allow_html=True)
+    if st.session_state.mission_idx < len(MISSIONS) - 1:
+        if st.button("🚀 Start next mission"):
+            start_mission(st.session_state.mission_idx + 1)
+    if st.button("🗺️ Back to adventure map"):
+        go("map")
